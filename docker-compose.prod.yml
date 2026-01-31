@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: gym_ai_postgres_prod
+    environment:
+      POSTGRES_DB: gym_ai
+      POSTGRES_USER: gym_user
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+    - db_password
+    volumes:
+    - postgres_data_prod:/var/lib/postgresql/data
+    - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    - ./database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
+    networks:
+    - backend_network
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U gym_user -d gym_ai]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    container_name: gym_ai_redis_prod
+    volumes:
+    - redis_data_prod:/data
+    networks:
+    - backend_network
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: production
+    container_name: gym_ai_backend_prod
+    environment:
+    - DATABASE_URL=postgresql+asyncpg://gym_user:${DB_PASSWORD}@postgres:5432/gym_ai
+    - REDIS_URL=redis://redis:6379
+    - AI_PROVIDER=openai
+    - USE_DOCKER_SECRETS=true
+    secrets:
+    - openai_api_key
+    - db_password
+    volumes:
+    - model_cache_prod:/app/model_cache
+    ports:
+    - 8000:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+    - backend_network
+    - frontend_network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  dashboard:
+    build:
+      context: ./web-dashboard
+      dockerfile: Dockerfile
+    container_name: gym_ai_dashboard_prod
+    environment:
+    - BACKEND_URL=http://backend:8000
+    - DASH_DEBUG=false
+    ports:
+    - 8050:8050
+    depends_on:
+    - backend
+    networks:
+    - frontend_network
+    restart: always
+
+secrets:
+  openai_api_key:
+    external: true
+  db_password:
+    external: true
+
+networks:
+  backend_network:
+    driver: bridge
+    internal: true
+  frontend_network:
+    driver: bridge
+
+volumes:
+  postgres_data_prod:
+    driver: local
+  redis_data_prod:
+    driver: local
+  model_cache_prod:
+    driver: local

@@ -1,0 +1,55 @@
+# Development services (backend + dashboard)
+# Requires services to be running first
+# Start with: docker-compose -f docker-compose.dev.yml up -d
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: development
+    container_name: gym_ai_backend
+    env_file:
+    - ./backend/.env
+    environment:
+    - DATABASE_URL=postgresql+asyncpg://gym_user:gym_dev_password@postgres:5432/gym_ai
+    - REDIS_URL=redis://redis:6379
+    - AI_PROVIDER=llava
+    - OLLAMA_URL=http://ollama:11434
+    - OLLAMA_MODEL=llava
+    volumes:
+    - ./backend/app:/app/app
+    - model_cache:/app/model_cache
+    ports:
+    - 8000:8000
+    depends_on:
+    - postgres
+    - redis
+    - ollama
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+    - gym_ai_network
+
+  dashboard:
+    build:
+      context: ./web-dashboard
+      dockerfile: Dockerfile
+    container_name: gym_ai_dashboard
+    environment:
+    - BACKEND_URL=http://backend:8000
+    ports:
+    - 8050:8050
+    depends_on:
+    - backend
+    restart: unless-stopped
+    networks:
+    - gym_ai_network
+
+volumes:
+  model_cache:
+    driver: local
+
+networks:
+  gym_ai_network:
+    external: true
