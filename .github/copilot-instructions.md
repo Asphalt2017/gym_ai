@@ -138,7 +138,7 @@ Optional but important:
 
 - [scripts/dev.sh](../scripts/dev.sh): Wrapper for docker-compose with shortcuts (`start`, `stop`,
   `logs`, `test`, `db-shell`, `clean`)
-- [test-dashboard/app.py](../test-dashboard/app.py): Dash web UI for manual testing at
+- [web-dashboard/app.py](../web-dashboard/app.py): Dash web UI for manual testing at
   http://localhost:8050
 
 ## Documentation References
